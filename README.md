@@ -1,28 +1,27 @@
-# Simulador hídrico del suelo y transitabilidad (prototipo)
+# Simulador hídrico del suelo y transitabilidad — versión 2
 
-## Ejecución local
+Aplicación académica en Streamlit. Incluye balance horario de infiltración, evaporación, transpiración, drenaje, humedad de dos capas y **cribado exploratorio** de maquinaria.
+
+## Ejecución
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-## Ejecución online
+En Streamlit Community Cloud usa **app.py** como archivo principal.
 
-1. Crea un repositorio en GitHub con `app.py`, `modelo.py` y `requirements.txt`.
-2. Ingresa a https://share.streamlit.io/ (Streamlit Community Cloud) y conecta el repositorio.
-3. Selecciona `app.py` como archivo principal y despliega la app.
+## Novedades v2
 
-Como alternativa para ejecutar el prototipo en Google Colab se pueden instalar dependencias, pero para la interfaz accesible vía web resulta más directo Streamlit Community Cloud.
+- Cálculo indicativo de carga por rueda del eje más cargado y área de contacto; **no** equivale a cálculo de capacidad portante.
+- Indicador opcional de resistencia de penetrómetro comparada con presión de contacto. Su umbral es arbitrario hasta calibración local; nunca debe usarse como autorización automática.
+- Se corrige la ventana de `N` horas: ahora se informa tanto cuándo comienza como cuándo **se completan** las N horas favorables después de la última lluvia.
+- Gráfico de humedad frente a umbrales editables.
 
-## Datos
+## Datos CSV
 
-CSV horario con `fecha,precipitacion_mm,eto_mm,riego_mm`. `fecha` debe ser una marca temporal horaria continua. La precipitación y ET0 son cantidades acumuladas durante esa hora, no intensidad instantánea. `eto_mm` y `riego_mm` son opcionales.
+Una fila por hora, con columnas `fecha,precipitacion_mm,eto_mm,riego_mm`. La primera y segunda obligatorias. `eto_mm` es ET0 **introducida**, no calculada con FAO-56 Penman-Monteith. Valores de suelo son orientativos: requieren ajuste local.
 
-## Límites importantes
+## Limitaciones
 
-Es un modelo conceptual con Green-Ampt explícito, depósitos de humedad, ET0 como entrada y reglas de transitabilidad definidas por el usuario. No es FAO-56 dual, Richards ni una validación de tránsito. Cualquier decisión de ingreso requiere medidas de campo y evaluación de la capacidad portante y las cargas por rueda.
-
-Fuentes para documentar metodología:
-- https://www.hec.usace.army.mil/confluence/hmsdocs/hmstrm/canopy-surface-infiltration-and-runoff-volume/infiltration/green-and-ampt-loss-model
-- https://www.fao.org/4/x0490e/x0490e00.htm
+Este prototipo no modela plenamente flujo no saturado, ni cambios de resistencia mecánica con la humedad, ni compactación real, ni huellas, ni resistencia al corte. Una medición única de penetrómetro no puede extrapolarse a futuras horas. **La clasificación favorable es SOLO hídrica**, no un permiso de ingreso. Requiere ensayos y validación de campo antes de utilizarse para operaciones.

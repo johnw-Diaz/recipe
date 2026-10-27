@@ -149,3 +149,59 @@ def simular(datos: pd.DataFrame, c: Config):
     salidas=sum(out[k].sum() for k in ['escorrentia_mm','evaporacion_mm','transpiracion_mm','drenaje_profundo_mm'])
     residual=entradas-salidas-(out.almacenamiento_mm.iloc[-1]-initial_storage)
     return out, residual
+
+
+def evaluar_transito(resultado, cfg, masa_kg, numero_ruedas, fraccion_eje,
+                    presion_contacto_kpa, resistencia_mpa=None,
+                    indice_seguridad=2.0, horas_persistencia=6):
+    """Cribado exploratorio, NO cálculo validado de capacidad portante.
+
+    La resistencia al penetrómetro (índice de cono) no equivale a una presión
+    admisible. El índice resistencia/presión de contacto es solo un INDICADOR
+    empírico cuya cota debe calibrarse con datos de campo locales.
+    """
+    if masa_kg <= 0 or numero_ruedas < 2 or not (0 < fraccion_eje <= 1) or presion_contacto_kpa <= 0:
+        raise ValueError('Verifica la masa, cantidad de ruedas, fracción de carga y presión de contacto.')
+    if horas_persistencia < 1:
+        raise ValueError('Las horas consecutivas deben ser mayores que cero.')
+    # Carga por rueda del eje crítico (fracción de masa soportada por el eje, en dos ruedas).
+    carga_rueda_kn = masa_kg * 9.81 * fraccion_eje / 2 / 1000
+    area_contacto_m2 = carga_rueda_kn / presion_contacto_kpa
+    equivalente_diametro_m = (4 * area_contacto_m2 / math.pi) ** .5
+    df = resultado.copy()
+    df['humedad_favorable'] = (df['estado'] == 'Humedad favorable (no habilita ingreso)')
+    df['condicion_humedad'] = df['estado'].map(lambda x: 'Favorable' if x == 'Humedad favorable (no habilita ingreso)' else ('Precaución' if x == 'Precaución (preliminar)' else 'No favorable'))
+    # Resistencia constante tomada en un instante no sirve para predecir la evolución de resistencia futura.
+    if resistencia_mpa is not None:
+        razon = resistencia_mpa * 1000 / presion_contacto_kpa
+        respaldo = razon >= indice_seguridad
+        df['cribado_resistencia'] = 'Cumple umbral exploratorio' if respaldo else 'No cumple umbral exploratorio'
+    else:
+        razon = None
+        df['cribado_resistencia'] = 'Sin medición de resistencia'
+    con_agua = (df['precipitacion_mm'] + df['riego_mm']) > 1e-9
+    indices = df.index[con_agua]
+    ultima_lluvia = int(indices[-1]) if len(indices) else -1
+    i_primer = None
+    i_confirmado = None
+    for i in range(ultima_lluvia+1, len(df)-horas_persistencia+1):
+        if bool(df['humedad_favorable'].iloc[i:i+horas_persistencia].all()):
+            i_primer = i
+            i_confirmado = i+horas_persistencia-1
+            break
+    resultado_ventana = None
+    if i_primer is not None:
+        tll = pd.to_datetime(df.iloc[ultima_lluvia]['fecha']) if ultima_lluvia >= 0 else None
+        inicio = pd.to_datetime(df.iloc[i_primer]['fecha'])
+        confirmacion = pd.to_datetime(df.iloc[i_confirmado]['fecha'])
+        resultado_ventana = {'inicio': inicio, 'confirmacion': confirmacion,
+                             'horas_desde_ultima_lluvia_a_confirmacion': ((confirmacion-tll).total_seconds()/3600 if tll is not None else None)}
+    return df, {
+        'carga_por_rueda_kn': carga_rueda_kn,
+        'area_contacto_m2': area_contacto_m2,
+        'diametro_equivalente_m': equivalente_diametro_m,
+        'indice_resistencia_presion': razon,
+        'umbral_indice': indice_seguridad,
+        'ventana': resultado_ventana,
+        'resistencia_medida': resistencia_mpa is not None,
+    }
